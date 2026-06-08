@@ -129,7 +129,7 @@
     "399006": { "name": "创业板指", "market": "A" },
     "000905": { "name": "中证500", "market": "A" },
     "000922": { "name": "中证红利", "market": "A" },
-    "NDX": { "name": "纳斯达克100", "market": "US" },
-    "SPX": { "name": "标普500", "market": "US" }
+    "QQQ": { "name": "纳斯达克100(QQQ)", "market": "US" },
+    "SPY": { "name": "标普500(SPY)", "market": "US" }
   }
 }

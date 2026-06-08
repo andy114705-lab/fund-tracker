@@ -115,6 +115,18 @@ def main():
     print("=" * 50)
     print("📊 采集美股指数...")
     finnhub_key = os.environ.get("FINNHUB_KEY", "")
+    if not finnhub_key:
+        # Fallback: read from Hermes .env
+        import re as _re
+        env_p = os.path.join(os.path.expanduser("~"), "AppData", "Local", "hermes", ".env")
+        try:
+            with open(env_p, "r") as _f:
+                for _line in _f:
+                    if "FINNHUB_KEY" in _line:
+                        finnhub_key = _line.split("=", 1)[1].strip().strip('"').strip("'")
+                        break
+        except (PermissionError, FileNotFoundError):
+            pass
     if finnhub_key:
         us_indices = config.get("indices", {})
         for sym, info in us_indices.items():

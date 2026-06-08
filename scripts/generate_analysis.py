@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 """
 每周 AI 分析报告生成脚本
-- 读取基金数据、价格数据、定投记录
-- 调用 DeepSeek API 生成投资分析报告
-- 输出 data/analysis.html 和 data/analysis.json
-
 用法: python generate_analysis.py
 """
 
 import json
 import os
+import re
 import sys
 from datetime import datetime
 
@@ -19,37 +16,28 @@ DATA_DIR = os.path.join(PROJECT_DIR, "data")
 
 
 def get_api_key():
-    """获取 DeepSeek API Key，多途径尝试"""
-    # 1. 环境变量
+    """获取 DeepSeek API Key"""
     key = os.environ.get("DEEPSEEK_API_KEY")
-    if key:
+    if key and len(key) > 5:
         return key
 
-    # 2. Hermes .env
-    env_path = os.path.join(os.path.expanduser("~"), "AppData", "Local", "hermes", ".env")
+    env_path = os.path.join(
+        os.path.expanduser("~"), "AppData", "Local", "hermes", ".env"
+    )
     try:
         with open(env_path, "r") as f:
             for line in f:
-                prefix = "DEEPSEEK_API_KEY="
-                if line.startswith(prefix):
-                    val = line[len(prefix):].strip()
-                    val = val.strip('"').strip("'")
+                if "DEEPSEEK_API_KEY" not in line:
+                    continue
+                # Extract value after '='
+                eq_pos = line.index("=")
+                val = line[eq_pos + 1:].strip()
+                val = val.strip('"').strip("'").strip()
+                if len(val) > 5:
                     return val
-    except PermissionError:
+                break
+    except (PermissionError, ValueError):
         pass
-
-    # 3. Hermes CLI
-    import subprocess
-    try:
-        r = subprocess.run(
-            ["hermes", "config", "get", "DEEPSEEK_API_KEY"],
-            capture_output=True, text=True, timeout=5
-        )
-        if r.returncode == 0 and r.stdout.strip():
-            return r.stdout.strip()
-    except Exception:
-        pass
-
     return None
 
 
@@ -165,10 +153,17 @@ def build_prompt(ctx):
         "=== 持仓基金 ===",
     ]
     for f in ctx["funds"]:
-        s = {"active": "定投中", "paused": "暂停", "watching": "观察中"}.get(f["status"], f["status"])
+        s = {"active": "定投中", "paused": "暂停", "watching": "观察中"}.get(
+            f["status"], f["status"]
+        )
         lines.append(f"\n{f['code']} {f['name']}")
-        lines.append(f"  类型:{f['category']} | 市场:{f['market']} | 状态:{s}")
-        lines.append(f"  开始:{f['start_date'] or '未开始'} | 周投:{f['weekly_amount']}元 | 累计投入:{f['invested']}元")
+        lines.append(
+            f"  类型:{f['category']} | 市场:{f['market']} | 状态:{s}"
+        )
+        lines.append(
+            f"  开始:{f['start_date'] or '未开始'} | "
+            f"周投:{f['weekly_amount']}元 | 累计投入:{f['invested']}元"
+        )
         lines.append(f"  最新净值:{f['nav'] or '无'} ({f['nav_date'] or ''})")
         if f["est_return_pct"] is not None:
             sign = "+" if f["est_return_pct"] >= 0 else ""
@@ -180,7 +175,10 @@ def build_prompt(ctx):
         lines.append("\n=== 市场指数 ===")
         for s, d in ctx["indices"].items():
             sign = "+" if (d.get("change_pct") or 0) >= 0 else ""
-            lines.append(f"  {s}({d['name']}): {d.get('price','N/A')} 涨跌:{sign}{d.get('change_pct','N/A')}%")
+            lines.append(
+                f"  {s}({d['name']}): {d.get('price','N/A')} "
+                f"涨跌:{sign}{d.get('change_pct','N/A')}%"
+            )
 
     lines.append("""
 
@@ -209,7 +207,8 @@ def build_prompt(ctx):
 未来1-2周关注的风险事件，组合层面风险敞口提醒。
 
 ---
-注意：基于真实净值数据，缺少关键数据时明确说明，建议要具体可执行。""")
+注意：基于真实净值数据，缺少关键数据时明确说明，建议要具体可执行。
+""")
 
     return "\n".join(lines)
 
@@ -229,24 +228,29 @@ def main():
         print(f"ERROR: {e}")
         sys.exit(1)
 
-    # Save JSON
     json_path = os.path.join(DATA_DIR, "analysis.json")
     with open(json_path, "w", encoding="utf-8") as f:
-        json.dump({
-            "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "data_as_of": ctx["as_of"],
-            "content": analysis,
-        }, f, ensure_ascii=False, indent=2)
+        json.dump(
+            {
+                "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "data_as_of": ctx["as_of"],
+                "content": analysis,
+            },
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
 
-    # Save HTML
     html_path = os.path.join(DATA_DIR, "analysis.html")
     now_str = datetime.now().strftime("%Y-%m-%d")
     html = f"""<!DOCTYPE html>
 <html lang="zh-CN">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>投资分析报告 - {now_str}</title>
 <style>
-body{{font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;background:#0f1117;color:#e1e4ed;padding:20px;max-width:900px;margin:0 auto;line-height:1.8}}
+body{{font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
+background:#0f1117;color:#e1e4ed;padding:20px;max-width:900px;margin:0 auto;line-height:1.8}}
 h1{{color:#e1e4ed;font-size:1.4em}}
 h2{{color:#3b82f6;border-bottom:1px solid #2a2d3e;padding-bottom:8px;margin-top:28px}}
 h3{{color:#8b90a5;margin-top:20px}}
@@ -258,7 +262,7 @@ tr:hover{{background:#1a1d2e}}
 </style></head>
 <body>
 <h1>基金定投分析报告</h1>
-<p class="meta">生成时间: {datetime.now().strftime("%Y-%m-%d %H:%M")} | 数据截至: {ctx["as_of"]}</p>
+<p class="meta">生成: {datetime.now().strftime("%Y-%m-%d %H:%M")} | 数据: {ctx["as_of"]}</p>
 {analysis}
 </body></html>"""
     with open(html_path, "w", encoding="utf-8") as f:
