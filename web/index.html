@@ -108,11 +108,11 @@
 
   <!-- Tabs -->
   <div class="tabs">
-    <button class="tab active" onclick="switchTab('active')">🟢 定投中</button>
-    <button class="tab" onclick="switchTab('paused')">⏸️ 已暂停</button>
-    <button class="tab" onclick="switchTab('watching')">👀 观察中</button>
-    <button class="tab" onclick="switchTab('record')">✏️ 录入定投</button>
-    <button class="tab" onclick="switchTab('analysis')">🤖 AI 分析</button>
+    <button class="tab active" onclick="switchTab('active',this)">🟢 定投中</button>
+    <button class="tab" onclick="switchTab('paused',this)">⏸️ 已暂停</button>
+    <button class="tab" onclick="switchTab('watching',this)">👀 观察中</button>
+    <button class="tab" onclick="switchTab('record',this)">✏️ 录入定投</button>
+    <button class="tab" onclick="switchTab('analysis',this)">🤖 AI 分析</button>
   </div>
 
   <!-- Fund Table -->
@@ -315,10 +315,10 @@ function populateFundSelect() {
 }
 
 // ============ ACTIONS ============
-function switchTab(tab) {
+function switchTab(tab, btn) {
   activeTab = tab;
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  event.target.classList.add('active');
+  if (btn) btn.classList.add('active');
   
   document.getElementById('recordPanel').classList.toggle('hidden', tab !== 'record');
   document.getElementById('analysisPanel').classList.toggle('hidden', tab !== 'analysis');
@@ -352,7 +352,6 @@ function addRecord() {
 
 async function loadAnalysis() {
   const el = document.getElementById('analysisContent');
-  // Prefer pre-rendered HTML (works without marked.js)
   try {
     const res = await fetch('data/analysis.html');
     if (res.ok) {
@@ -360,30 +359,123 @@ async function loadAnalysis() {
       return;
     }
   } catch(_) {}
-  // Fallback: JSON + simple markdown rendering
+
   try {
     const res = await fetch('data/analysis.json');
-    if (!res.ok) throw new Error('none');
-    const data = await res.json();
-    el.innerHTML = simpleMarkdown(data.content);
-    return;
-  } catch(e) {}
-    el.innerHTML = `<p style="color:var(--text2)">📝 AI 分析报告将在每周六上午 9:00 自动生成。<br><br>当前还没有报告，请耐心等待。</p>`;
-  }
+    if (res.ok) {
+      const data = await res.json();
+      el.innerHTML = simpleMarkdown(data.content);
+      return;
+    }
+  } catch(_) {}
+
+  el.innerHTML = '<p style="color:var(--text2)">📝 AI 分析报告将在每周六上午 9:00 自动生成。<br><br>当前还没有报告，请耐心等待。</p>';
 }
 
-// Simple markdown-to-HTML converter (no dependency needed)
+// Markdown → HTML converter
 function simpleMarkdown(md) {
-  return md
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+  if (!md) return '';
+  // Escape HTML but preserve already-escaped entities
+  let html = md
+    .replace(/&(?!#?\w+;)/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // Process block by block
+  let blocks = html.split('\n');
+  let result = [];
+  let inTable = false;
+  let tableHtml = '';
+  let inList = false;
+
+  function closeTable() {
+    if (inTable) { result.push(tableHtml + '</tbody></table>'); tableHtml = ''; inTable = false; }
+  }
+  function closeList() {
+    if (inList) { result.push('</ul>'); inList = false; }
+  }
+
+  for (let i = 0; i < blocks.length; i++) {
+    let line = blocks[i].trim();
+
+    // Empty line
+    if (!line) {
+      closeTable();
+      closeList();
+      continue;
+    }
+
+    // Horizontal rule
+    if (/^[-*_]{3,}$/.test(line)) {
+      closeTable(); closeList();
+      result.push('<hr>');
+      continue;
+    }
+
+    // Headings
+    let h = line.match(/^(#{1,6})\s+(.+)$/);
+    if (h) {
+      closeTable(); closeList();
+      let level = h[1].length;
+      result.push('<h' + level + '>' + inlineFormat(h[2]) + '</h' + level + '>');
+      continue;
+    }
+
+    // Table row
+    if (line.startsWith('|') && line.endsWith('|')) {
+      closeList();
+      if (line.match(/^\|[\s\-:]+\|/)) continue; // separator row
+      if (!inTable) { tableHtml = '<table><tbody>'; inTable = true; }
+      let cells = line.split('|').slice(1, -1);
+      let row = '<tr>' + cells.map(c => {
+        let tag = inTable && result.length === 0 ? 'th' : 'td';
+        return '<' + tag + '>' + inlineFormat(c.trim()) + '</' + tag + '>';
+      }).join('') + '</tr>';
+      tableHtml += row;
+      continue;
+    } else {
+      closeTable();
+    }
+
+    // Unordered list
+    if (/^[-*+]\s+/.test(line)) {
+      closeTable();
+      if (!inList) { result.push('<ul>'); inList = true; }
+      result.push('<li>' + inlineFormat(line.replace(/^[-*+]\s+/, '')) + '</li>');
+      continue;
+    }
+
+    // Ordered list
+    if (/^\d+\.\s+/.test(line)) {
+      closeTable();
+      closeList();
+      result.push('<ol>');
+      result.push('<li>' + inlineFormat(line.replace(/^\d+\.\s+/, '')) + '</li>');
+      // Look ahead for more ordered items
+      while (i + 1 < blocks.length && /^\d+\.\s+/.test(blocks[i + 1].trim())) {
+        i++;
+        result.push('<li>' + inlineFormat(blocks[i].trim().replace(/^\d+\.\s+/, '')) + '</li>');
+      }
+      result.push('</ol>');
+      continue;
+    }
+
+    // Regular paragraph
+    closeList();
+    result.push('<p>' + inlineFormat(line) + '</p>');
+  }
+
+  closeTable();
+  closeList();
+  return result.join('\n');
+}
+
+function inlineFormat(text) {
+  // Bold, italic, code
+  return text
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\|(.+)\|/g, (m) => m.replace(/^\|/, '<tr><td>').replace(/\|$/, '</td></tr>').replace(/\|/g, '</td><td>'))
-    .replace(/- (.+)/g, '<li>$1</li>')
-    .replace(/\n\n/g, '</p><p>')
-    .replace(/^(.+)$/gm, (m) => m.startsWith('<') ? m : '<p>' + m + '</p>');
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>');
 }
 
 // ============ INIT ============

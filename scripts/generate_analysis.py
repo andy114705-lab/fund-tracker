@@ -213,6 +213,99 @@ def build_prompt(ctx):
     return "\n".join(lines)
 
 
+def md_to_html(md):
+    """Simple markdown to HTML converter"""
+    import re as _re
+    if not md:
+        return ""
+    lines = md.split("\n")
+    result = []
+    in_table = False
+    in_list = False
+    table_rows = []
+
+    def close_table():
+        nonlocal in_table, table_rows
+        if in_table:
+            result.append("<table><tbody>" + "".join(table_rows) + "</tbody></table>")
+            table_rows = []
+            in_table = False
+
+    def close_list():
+        nonlocal in_list
+        if in_list:
+            result.append("</ul>")
+            in_list = False
+
+    def inline(text):
+        text = _re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+        text = _re.sub(r"\*(.+?)\*", r"<em>\1</em>", text)
+        text = _re.sub(r"`([^`]+)`", r"<code>\1</code>", text)
+        return text
+
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if not line:
+            close_table()
+            close_list()
+            i += 1
+            continue
+
+        # HR
+        if _re.match(r"^[-*_]{3,}$", line):
+            close_table(); close_list()
+            result.append("<hr>")
+            i += 1
+            continue
+
+        # Headings
+        hm = _re.match(r"^(#{1,6})\s+(.+)$", line)
+        if hm:
+            close_table(); close_list()
+            lvl = len(hm.group(1))
+            result.append(f"<h{lvl}>{inline(hm.group(2))}</h{lvl}>")
+            i += 1
+            continue
+
+        # Table
+        if line.startswith("|") and line.endswith("|"):
+            close_list()
+            if _re.match(r"^\|[\s\-:]+\|", line):
+                i += 1
+                continue
+            if not in_table:
+                in_table = True
+            cells = [inline(c.strip()) for c in line.split("|")[1:-1]]
+            tag = "th" if len(table_rows) == 0 else "td"
+            row = "<tr>" + "".join(f"<{tag}>{c}</{tag}>" for c in cells) + "</tr>"
+            table_rows.append(row)
+            i += 1
+            continue
+        else:
+            close_table()
+
+        # Unordered list
+        if _re.match(r"^[-*+]\s+", line):
+            close_table()
+            if not in_list:
+                result.append("<ul>")
+                in_list = True
+            cleaned = _re.sub(r"^[-*+]\s+", "", line)
+            result.append(f"<li>{inline(cleaned)}</li>")
+            i += 1
+            continue
+
+        # Regular text
+        close_list()
+        result.append(f"<p>{inline(line)}</p>")
+        i += 1
+
+    close_table()
+    close_list()
+    return "\n".join(result)
+
+
 def main():
     ctx = build_context()
     prompt = build_prompt(ctx)
@@ -227,6 +320,8 @@ def main():
     except Exception as e:
         print(f"ERROR: {e}")
         sys.exit(1)
+
+    # Save JSON first (raw markdown)
 
     json_path = os.path.join(DATA_DIR, "analysis.json")
     with open(json_path, "w", encoding="utf-8") as f:
@@ -243,6 +338,10 @@ def main():
 
     html_path = os.path.join(DATA_DIR, "analysis.html")
     now_str = datetime.now().strftime("%Y-%m-%d")
+
+    # Convert markdown to HTML for standalone viewing
+    analysis_html = md_to_html(analysis)
+
     html = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head><meta charset="UTF-8">
@@ -251,19 +350,26 @@ def main():
 <style>
 body{{font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
 background:#0f1117;color:#e1e4ed;padding:20px;max-width:900px;margin:0 auto;line-height:1.8}}
-h1{{color:#e1e4ed;font-size:1.4em}}
 h2{{color:#3b82f6;border-bottom:1px solid #2a2d3e;padding-bottom:8px;margin-top:28px}}
-h3{{color:#8b90a5;margin-top:20px}}
+h3{{color:#e1e4ed;margin-top:24px;font-size:1.1em}}
+h4{{color:#8b90a5;margin-top:20px}}
 table{{width:100%;border-collapse:collapse;margin:16px 0;font-size:0.92em}}
-th{{background:#1a1d2e;color:#8b90a5;padding:10px;text-align:left;font-weight:500}}
-td{{padding:10px;border-bottom:1px solid #2a2d3e}}
+th{{background:#1a1d2e;color:#8b90a5;padding:10px 14px;text-align:left;font-weight:500}}
+td{{padding:10px 14px;border-bottom:1px solid #2a2d3e}}
 tr:hover{{background:#1a1d2e}}
+hr{{border:none;border-top:1px solid #2a2d3e;margin:24px 0}}
+ul,ol{{padding-left:24px;margin:12px 0}}
+li{{margin:4px 0}}
+strong{{color:#e1e4ed}}
+code{{background:#1a1d2e;padding:2px 6px;border-radius:4px;font-size:0.9em}}
 .meta{{color:#8b90a5;font-size:0.85em;margin-bottom:24px}}
+.green{{color:#22c55e}}
+.red{{color:#ef4444}}
 </style></head>
 <body>
-<h1>基金定投分析报告</h1>
+<h2>📊 基金定投分析报告</h2>
 <p class="meta">生成: {datetime.now().strftime("%Y-%m-%d %H:%M")} | 数据: {ctx["as_of"]}</p>
-{analysis}
+{analysis_html}
 </body></html>"""
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(html)
