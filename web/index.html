@@ -352,22 +352,38 @@ function addRecord() {
 
 async function loadAnalysis() {
   const el = document.getElementById('analysisContent');
+  // Prefer pre-rendered HTML (works without marked.js)
+  try {
+    const res = await fetch('data/analysis.html');
+    if (res.ok) {
+      el.innerHTML = await res.text();
+      return;
+    }
+  } catch(_) {}
+  // Fallback: JSON + simple markdown rendering
   try {
     const res = await fetch('data/analysis.json');
-    if (!res.ok) throw new Error('分析报告尚未生成');
+    if (!res.ok) throw new Error('none');
     const data = await res.json();
-    el.innerHTML = marked.parse(data.content); // requires marked.js
-  } catch(e) {
-    // Try HTML format
-    try {
-      const res = await fetch('data/analysis.html');
-      if (res.ok) {
-        el.innerHTML = await res.text();
-        return;
-      }
-    } catch(_) {}
+    el.innerHTML = simpleMarkdown(data.content);
+    return;
+  } catch(e) {}
     el.innerHTML = `<p style="color:var(--text2)">📝 AI 分析报告将在每周六上午 9:00 自动生成。<br><br>当前还没有报告，请耐心等待。</p>`;
   }
+}
+
+// Simple markdown-to-HTML converter (no dependency needed)
+function simpleMarkdown(md) {
+  return md
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\|(.+)\|/g, (m) => m.replace(/^\|/, '<tr><td>').replace(/\|$/, '</td></tr>').replace(/\|/g, '</td><td>'))
+    .replace(/- (.+)/g, '<li>$1</li>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/^(.+)$/gm, (m) => m.startsWith('<') ? m : '<p>' + m + '</p>');
 }
 
 // ============ INIT ============

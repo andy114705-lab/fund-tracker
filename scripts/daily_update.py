@@ -13,10 +13,21 @@ PYTHON = os.path.expanduser("~/AppData/Local/Programs/Python/Python311/python.ex
 # Step 1: Fetch data
 print("=" * 40)
 print("Step 1: Fetching fund data...")
-r = subprocess.run([PYTHON, os.path.join(SCRIPT_DIR, "fetch_data.py")], cwd=SCRIPT_DIR)
+PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
+r = subprocess.run([PYTHON, os.path.join(SCRIPT_DIR, "fetch_data.py")], cwd=PROJECT_DIR)
 if r.returncode != 0:
     print("Data fetch FAILED", file=sys.stderr)
     sys.exit(1)
+
+# Step 1b: Copy data to web/data/ for local testing
+import shutil
+web_data = os.path.join(PROJECT_DIR, "web", "data")
+os.makedirs(web_data, exist_ok=True)
+for f in ["funds.json", "investments.json", "prices.json", "analysis.json", "analysis.html"]:
+    src = os.path.join(PROJECT_DIR, "data", f)
+    if os.path.exists(src):
+        shutil.copy2(src, os.path.join(web_data, f))
+print("  Copied data to web/data/")
 
 # Step 2: Commit & push
 print("=" * 40)

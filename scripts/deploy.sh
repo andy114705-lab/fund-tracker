@@ -13,8 +13,16 @@ if [ -z "$GIT_REMOTE" ]; then
     exit 0
 fi
 
-# Add data files
-git add data/funds.json data/investments.json data/prices.json data/analysis.json data/analysis.html web/
+# Copy data files into web/data/ for Cloudflare Pages
+mkdir -p web/data
+cp data/funds.json web/data/
+cp data/investments.json web/data/
+cp data/prices.json web/data/
+cp data/analysis.json web/data/ 2>/dev/null || true
+cp data/analysis.html web/data/ 2>/dev/null || true
+
+# Add all files
+git add data/ web/
 
 # Only commit if there are changes
 if git diff --cached --quiet; then
