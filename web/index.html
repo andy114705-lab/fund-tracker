@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📊 基金定投助手</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d2e;
+    --card2: #222640;
+    --text: #e1e4ed;
+    --text2: #8b90a5;
+    --green: #22c55e;
+    --red: #ef4444;
+    --blue: #3b82f6;
+    --yellow: #eab308;
+    --border: #2a2d3e;
+    --radius: 12px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); line-height:1.6; }
+  .container { max-width:1200px; margin:0 auto; padding:20px; }
+  
+  /* Header */
+  header { background: var(--card); border-bottom:1px solid var(--border); padding:16px 0; position:sticky; top:0; z-index:10; }
+  header .container { display:flex; justify-content:space-between; align-items:center; }
+  h1 { font-size:1.4em; }
+  .updated { color:var(--text2); font-size:0.8em; }
+
+  /* Dashboard Cards */
+  .dashboard { display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin:24px 0; }
+  .stat-card { background: var(--card); border-radius: var(--radius); padding:20px; border:1px solid var(--border); }
+  .stat-card .label { color:var(--text2); font-size:0.85em; margin-bottom:4px; }
+  .stat-card .value { font-size:1.8em; font-weight:700; }
+  .stat-card .sub { color:var(--text2); font-size:0.8em; margin-top:4px; }
+  .positive { color:var(--green); }
+  .negative { color:var(--red); }
+
+  /* Fund Table */
+  .section-title { font-size:1.1em; font-weight:600; margin:28px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  table { width:100%; border-collapse:collapse; background: var(--card); border-radius: var(--radius); overflow:hidden; }
+  th { background: var(--card2); color:var(--text2); font-weight:500; font-size:0.82em; padding:12px 14px; text-align:left; }
+  td { padding:12px 14px; border-bottom:1px solid var(--border); font-size:0.92em; }
+  tr:last-child td { border-bottom:none; }
+  tr:hover { background:var(--card2); }
+  
+  .status-active { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--green); margin-right:6px; }
+  .status-paused { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--yellow); margin-right:6px; }
+  .status-watching { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--text2); margin-right:6px; }
+
+  /* Badge */
+  .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:0.75em; }
+  .badge-tech { background:rgba(59,130,246,0.15); color:var(--blue); }
+  .badge-def { background:rgba(34,197,94,0.15); color:var(--green); }
+  .badge-us { background:rgba(234,179,8,0.15); color:var(--yellow); }
+  .badge-energy { background:rgba(239,68,68,0.15); color:var(--red); }
+
+  /* Tabs */
+  .tabs { display:flex; gap:8px; margin:20px 0; }
+  .tab { padding:8px 20px; border-radius:8px; cursor:pointer; border:1px solid var(--border); background:transparent; color:var(--text2); font-size:0.9em; transition:all .2s; }
+  .tab.active { background:var(--blue); border-color:var(--blue); color:#fff; }
+  .tab:hover:not(.active) { border-color:var(--text2); }
+
+  /* Input Form */
+  .form-row { display:flex; gap:12px; align-items:end; margin:16px 0; flex-wrap:wrap; }
+  .form-group { display:flex; flex-direction:column; gap:4px; }
+  .form-group label { font-size:0.82em; color:var(--text2); }
+  .form-group select, .form-group input { padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--text); font-size:0.9em; }
+  .btn { padding:8px 20px; border-radius:8px; border:none; cursor:pointer; font-size:0.9em; font-weight:500; }
+  .btn-primary { background:var(--blue); color:#fff; }
+  .btn-danger { background:var(--red); color:#fff; }
+  .btn:hover { opacity:0.85; }
+
+  /* Analysis */
+  .analysis-box { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:24px; margin:20px 0; white-space:pre-wrap; line-height:1.8; }
+  .analysis-box h2 { font-size:1.1em; margin:16px 0 8px; color:var(--blue); }
+  .analysis-box h3 { font-size:1em; margin:12px 0 6px; }
+  .signal { display:inline-block; padding:3px 10px; border-radius:6px; font-weight:600; font-size:0.85em; margin-right:8px; }
+  .signal-buy { background:rgba(34,197,94,0.2); color:var(--green); }
+  .signal-hold { background:rgba(234,179,8,0.2); color:var(--yellow); }
+  .signal-sell { background:rgba(239,68,68,0.2); color:var(--red); }
+
+  /* Loading */
+  .loading { text-align:center; padding:40px; color:var(--text2); }
+  .hidden { display:none; }
+
+  @media (max-width:768px) {
+    .container { padding:12px; }
+    .dashboard { grid-template-columns: repeat(2, 1fr); }
+    table { font-size:0.8em; }
+    th, td { padding:8px 6px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <h1>📊 基金定投助手</h1>
+    <span class="updated" id="updateTime">加载中...</span>
+  </div>
+</header>
+
+<div class="container">
+  <!-- Dashboard -->
+  <div class="dashboard" id="dashboard"></div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('active')">🟢 定投中</button>
+    <button class="tab" onclick="switchTab('paused')">⏸️ 已暂停</button>
+    <button class="tab" onclick="switchTab('watching')">👀 观察中</button>
+    <button class="tab" onclick="switchTab('record')">✏️ 录入定投</button>
+    <button class="tab" onclick="switchTab('analysis')">🤖 AI 分析</button>
+  </div>
+
+  <!-- Fund Table -->
+  <div id="tableContainer"></div>
+
+  <!-- Record Entry -->
+  <div id="recordPanel" class="hidden">
+    <div class="section-title">✏️ 录入定投记录</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>基金</label>
+        <select id="recordFund"></select>
+      </div>
+      <div class="form-group">
+        <label>日期</label>
+        <input type="date" id="recordDate">
+      </div>
+      <div class="form-group">
+        <label>金额 (元)</label>
+        <input type="number" id="recordAmount" placeholder="300" min="1">
+      </div>
+      <button class="btn btn-primary" onclick="addRecord()">添加</button>
+    </div>
+    <div id="recordMsg" style="margin-top:8px;font-size:0.9em;"></div>
+  </div>
+
+  <!-- AI Analysis -->
+  <div id="analysisPanel" class="hidden">
+    <div class="section-title">🤖 AI 投资分析报告</div>
+    <div id="analysisContent" class="analysis-box loading">加载分析报告...</div>
+  </div>
+</div>
+
+<script>
+// ============ DATA ============
+let funds = {};
+let prices = {};
+let investments = { records: [] };
+let activeTab = 'active';
+
+// ============ LOAD ============
+async function loadData() {
+  try {
+    const [fRes, pRes, iRes] = await Promise.all([
+      fetch('data/funds.json'),
+      fetch('data/prices.json'),
+      fetch('data/investments.json')
+    ]);
+    funds = await fRes.json();
+    prices = await pRes.json();
+    investments = await iRes.json();
+    document.getElementById('updateTime').textContent = '数据更新: ' + (prices.updated || '未知');
+    renderAll();
+  } catch(e) {
+    console.error(e);
+    document.getElementById('updateTime').textContent = '数据加载失败';
+  }
+}
+
+// ============ COMPUTE ============
+function computeStats() {
+  let totalInvested = 0, totalValue = 0, totalReturn = 0;
+  const fundStats = {};
+  
+  // Initialize
+  for (const code in funds.funds) {
+    fundStats[code] = { invested: 0, units: 0, latestNav: null, value: 0, return: 0, returnPct: 0 };
+  }
+  
+  // Sum investments (simplified: invested = sum of amounts; units = invested / avg_nav)
+  for (const r of investments.records) {
+    if (fundStats[r.code]) {
+      fundStats[r.code].invested += r.amount;
+    }
+  }
+  
+  // Compute current value
+  for (const code in fundStats) {
+    const nav = prices.funds?.[code]?.nav;
+    if (nav && fundStats[code].invested > 0) {
+      fundStats[code].latestNav = nav;
+      // Simplified: assume all invested at average of start nav... 
+      // For accuracy we'd need each purchase's NAV. This is an approximation.
+      const hist = prices.funds?.[code]?.history || [];
+      if (hist.length > 0) {
+        const avgNav = hist.reduce((s, h) => s + h.nav, 0) / hist.length;
+        fundStats[code].units = fundStats[code].invested / avgNav;
+        fundStats[code].value = fundStats[code].units * nav;
+        fundStats[code].return = fundStats[code].value - fundStats[code].invested;
+        fundStats[code].returnPct = fundStats[code].invested > 0 ? (fundStats[code].return / fundStats[code].invested * 100) : 0;
+      }
+    }
+    totalInvested += fundStats[code].invested;
+    totalValue += fundStats[code].value;
+  }
+  
+  totalReturn = totalValue - totalInvested;
+  const totalReturnPct = totalInvested > 0 ? (totalReturn / totalInvested * 100) : 0;
+  
+  return { fundStats, totalInvested, totalValue, totalReturn, totalReturnPct };
+}
+
+// ============ RENDER ============
+function renderAll() {
+  const stats = computeStats();
+  
+  // Dashboard
+  const dash = document.getElementById('dashboard');
+  const cls = stats.totalReturn >= 0 ? 'positive' : 'negative';
+  const sign = stats.totalReturn >= 0 ? '+' : '';
+  dash.innerHTML = `
+    <div class="stat-card">
+      <div class="label">总投入</div>
+      <div class="value">¥${stats.totalInvested.toFixed(0)}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">当前市值</div>
+      <div class="value">¥${stats.totalValue.toFixed(0)}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">累计收益</div>
+      <div class="value ${cls}">${sign}${stats.totalReturn.toFixed(0)}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">收益率</div>
+      <div class="value ${cls}">${sign}${stats.totalReturnPct.toFixed(2)}%</div>
+      <div class="sub">约等于 (简易计算)</div>
+    </div>
+  `;
+  
+  renderTable(stats.fundStats);
+  populateFundSelect();
+}
+
+function renderTable(fundStats) {
+  const container = document.getElementById('tableContainer');
+  const filtered = Object.entries(funds.funds).filter(([code, f]) => {
+    if (activeTab === 'active') return f.status === 'active';
+    if (activeTab === 'paused') return f.status === 'paused';
+    if (activeTab === 'watching') return f.status === 'watching';
+    return true;
+  });
+  
+  if (activeTab === 'record' || activeTab === 'analysis') {
+    container.innerHTML = '';
+    return;
+  }
+  
+  if (filtered.length === 0) {
+    container.innerHTML = '<p style="color:var(--text2);padding:20px;">暂无基金</p>';
+    return;
+  }
+  
+  const statusLabels = { active:'定投中', paused:'已暂停', watching:'观察中' };
+  
+  let html = '<table><thead><tr><th>代码</th><th>名称</th><th>类型</th><th>净值</th><th>投入</th><th>市值</th><th>收益</th><th>收益率</th><th>状态</th></tr></thead><tbody>';
+  
+  for (const [code, f] of filtered) {
+    const s = fundStats[code] || {};
+    const nav = s.latestNav ? `¥${s.latestNav.toFixed(4)}` : prices.funds?.[code]?.nav ? `¥${prices.funds[code].nav.toFixed(4)}` : '—';
+    const invested = s.invested > 0 ? `¥${s.invested.toFixed(0)}` : '—';
+    const value = s.value > 0 ? `¥${s.value.toFixed(0)}` : '—';
+    const retCls = s.returnPct >= 0 ? 'positive' : 'negative';
+    const retSign = s.returnPct >= 0 ? '+' : '';
+    const ret = s.invested > 0 ? `<span class="${retCls}">${retSign}${s.return.toFixed(0)}</span>` : '—';
+    const retPct = s.invested > 0 ? `<span class="${retCls}">${retSign}${s.returnPct.toFixed(2)}%</span>` : '—';
+    const statusIcon = f.status === 'active' ? 'status-active' : f.status === 'paused' ? 'status-paused' : 'status-watching';
+    
+    html += `<tr>
+      <td>${code}</td>
+      <td>${f.name}</td>
+      <td><span class="badge badge-tech">${f.category}</span></td>
+      <td>${nav}</td>
+      <td>${invested}</td>
+      <td>${value}</td>
+      <td>${ret}</td>
+      <td>${retPct}</td>
+      <td><span class="${statusIcon}"></span>${statusLabels[f.status] || f.status}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  
+  // Add pause reasons if any
+  for (const [code, f] of filtered) {
+    if (f.pause_reason) {
+      html += `<p style="color:var(--yellow); font-size:0.82em; margin-top:8px;">⚠️ ${f.name}: ${f.pause_reason}</p>`;
+    }
+  }
+  
+  container.innerHTML = html;
+}
+
+function populateFundSelect() {
+  const sel = document.getElementById('recordFund');
+  sel.innerHTML = Object.entries(funds.funds)
+    .filter(([_, f]) => f.status === 'active')
+    .map(([code, f]) => `<option value="${code}">${code} ${f.name}</option>`)
+    .join('');
+  document.getElementById('recordDate').value = new Date().toISOString().slice(0, 10);
+}
+
+// ============ ACTIONS ============
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  
+  document.getElementById('recordPanel').classList.toggle('hidden', tab !== 'record');
+  document.getElementById('analysisPanel').classList.toggle('hidden', tab !== 'analysis');
+  
+  renderTable(computeStats().fundStats);
+  
+  if (tab === 'analysis') loadAnalysis();
+}
+
+function addRecord() {
+  const code = document.getElementById('recordFund').value;
+  const date = document.getElementById('recordDate').value;
+  const amount = parseInt(document.getElementById('recordAmount').value);
+  const msgEl = document.getElementById('recordMsg');
+  
+  if (!date || !amount || amount <= 0) {
+    msgEl.innerHTML = '<span style="color:var(--red)">请完整填写日期和金额</span>';
+    return;
+  }
+  
+  investments.records.push({ date, code, amount: amount });
+  // Save to localStorage as temporary storage (real app would POST to server)
+  const saved = JSON.parse(localStorage.getItem('new_investments') || '[]');
+  saved.push({ date, code, amount: amount });
+  localStorage.setItem('new_investments', JSON.stringify(saved));
+  
+  msgEl.innerHTML = `<span style="color:var(--green)">✅ 已添加: ${code} ${funds.funds[code]?.name} — ${date} ¥${amount}</span>`;
+  document.getElementById('recordAmount').value = '';
+  renderAll();
+}
+
+async function loadAnalysis() {
+  const el = document.getElementById('analysisContent');
+  try {
+    const res = await fetch('data/analysis.json');
+    if (!res.ok) throw new Error('分析报告尚未生成');
+    const data = await res.json();
+    el.innerHTML = marked.parse(data.content); // requires marked.js
+  } catch(e) {
+    // Try HTML format
+    try {
+      const res = await fetch('data/analysis.html');
+      if (res.ok) {
+        el.innerHTML = await res.text();
+        return;
+      }
+    } catch(_) {}
+    el.innerHTML = `<p style="color:var(--text2)">📝 AI 分析报告将在每周六上午 9:00 自动生成。<br><br>当前还没有报告，请耐心等待。</p>`;
+  }
+}
+
+// ============ INIT ============
+document.addEventListener('DOMContentLoaded', loadData);
+</script>
+</body>
+</html>

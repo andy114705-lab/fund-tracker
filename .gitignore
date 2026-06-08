@@ -1,0 +1,15 @@
+# Fund Tracker - 基金定投助手
+
+# Python
+__pycache__/
+*.pyc
+
+# Data (regenerated daily)
+data/prices.json
+
+# Env
+.env
+
+# IDE
+.vscode/
+.idea/
